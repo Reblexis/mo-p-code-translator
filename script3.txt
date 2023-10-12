@@ -1,0 +1,9 @@
+Initial storage:
+5 c
+2 m
+Instructions:
+z + c + m2 -> m + c + z
+z -> 0
+m + c -> f + c + m2
+c -> z
+m2 -> 0

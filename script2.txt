@@ -1,0 +1,12 @@
+Initial storage:
+6 c
+5 m
+Limits:
+l <= 1
+Instructions:
+0 -> z + l
+z + c -> c2 + z
+z + m -> m2 + z
+z -> 0
+c2 -> c + f
+m2 -> m + f
