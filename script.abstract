@@ -1,0 +1,17 @@
+set variable_name value
+set variable_name $variable_name2
+
+add variable_name value
+add variable_name $variable_name2
+
+sub variable_name value
+sub variable_name $variable_name2
+
+# state_variable_name==1 if conditions hold, 0 otherwise
+eq variable_name value $state_variable_name
+eq variable_name $variable_name2 $state_variable_name
+neg $state_variable_name $state_variable_name2
+
+
+jump if $state_variable_name $label
+
