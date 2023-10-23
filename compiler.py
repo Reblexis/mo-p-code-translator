@@ -15,11 +15,17 @@ class Limit:
 
         return total <= self.limit
 
+    def __str__(self):
+        return f"{self.coefficients} <= {self.limit}"
+
 
 class Recipe:
     def __init__(self, input_items: dict, output_items: dict):
         self.input_items = input_items
         self.output_items = output_items
+
+    def __str__(self):
+        return f"{self.input_items} -> {self.output_items}"
 
 
 class Storage:
