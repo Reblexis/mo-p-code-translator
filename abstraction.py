@@ -61,23 +61,20 @@ class RecipeBlock:
 
 class WrapperFunction(Function):
     TOKEN_NAME = "token"
-    FINISH_NAME = "finish"
 
-    def wrap_block(self, block: RecipeBlock, function_name: str, index: int, last: bool = False):
+    def wrap_block(self, block: RecipeBlock, function_name: str, index: int):
         block.recipes[0].input_items[f"{function_name}_{self.TOKEN_NAME}_{index}"] = 1
-        if not last:
-            block.recipes[-1].output_items[f"{function_name}_{self.TOKEN_NAME}_{index + 1}"] = 1
+        block.recipes[-1].output_items[f"{function_name}_{self.TOKEN_NAME}_{index + 1}"] = 1
 
     def translate(self, blocks: list[RecipeBlock], function_name: str) -> RecipeBlock:
         blocks_copy = deepcopy(blocks)
         code: RecipeBlock = RecipeBlock([Recipe({function_name: 1},
-                                                {f"{function_name}_{self.TOKEN_NAME}_{0}": 1,
-                                                 f"{function_name}_{self.FINISH_NAME}": 1 })], function_name)
+                                                {f"{function_name}_{self.TOKEN_NAME}_{0}": 1})], function_name)
         for i in range(len(blocks)):
-            self.wrap_block(blocks_copy[i], function_name, i, i == len(blocks) - 1)
+            self.wrap_block(blocks_copy[i], function_name, i)
             code.join_block(blocks_copy[i])
 
-        code.add_recipe(Recipe({f"{function_name}_{self.FINISH_NAME}": 1}, {}))
+        code.add_recipe(Recipe({f"{function_name}_{self.TOKEN_NAME}_{len(blocks)}": 1}, {}))
         return code
 
 
