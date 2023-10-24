@@ -14,6 +14,7 @@ class AbstractCompiler(Compiler):
     def __init__(self, instructions: list[str]):
         super().__init__(instructions)
         self.variables = {}
+        self.pointers = {}
 
     def allocate_memory(self, memory_type: int, ) -> str:
         """
@@ -33,6 +34,9 @@ class AbstractCompiler(Compiler):
         current_value = self.variables.get(name, 0)
         self.variables[name] = current_value + 1
         return f"var_{name}_{current_value}"
+
+    def resolve_pointer(self, pointer_name: str) -> str:
+        return self.pointers[pointer_name]
 
 
 class BuildingBlock(ABC):
@@ -96,24 +100,17 @@ class FunctionCall:
 
 
 class FunctionCreator(BuildingBlock):
-    TOKEN_NAME = "token"
+    def translate(self, code_block: CodeBlock, function_name: str) -> FunctionBlock:
+        recipes: list[Recipe] = deepcopy(code_block.recipes)
+        limits: list[Limit] = deepcopy(code_block.limits)
 
-    def translate(self, function_calls: list[FunctionCall], function_name: str) -> FunctionBlock:
-        recipes: list[Recipe] = []
-        for function_call in function_calls:
-            call_recipe = Recipe({}, {function_call.function_name: 1})
-            for arg, amount in function_call.args.items():
-                call_recipe.output_items[arg] = amount
-            recipes.append(call_recipe)
-
-        recipes[0].input_items[function_name] = 1
         for i in range(len(recipes)):
-            if i != 0:
-                recipes[i].input_items[f"{function_name}_{self.TOKEN_NAME}_{i - 1}"] = 1
-            if i != len(recipes) - 1:
-                recipes[i].output_items[f"{function_name}_{self.TOKEN_NAME}_{i}"] = 1
+            recipes[i].input_items[function_name] = 1
+            recipes[i].output_items[function_name] = 1
 
-        return FunctionBlock(function_name, recipes)
+        recipes.append(Recipe({function_name: 1}, {}))
+
+        return FunctionBlock(function_name, recipes, limits)
 
 
 class ExecuteIfBlock(BuildingBlock):
@@ -129,7 +126,7 @@ class ExecuteIfBlock(BuildingBlock):
 
 class LoopWasteBlock(BuildingBlock):
     def __init__(self):
-        self.wrapper_function = FunctionCreator()
+        pass
 
     def translate(self, block: FunctionCall, amount_var: str) -> CodeBlock:
         loop_recipe = Recipe({amount_var: 1}, {block.function_name: 1})
@@ -141,7 +138,7 @@ class LoopWasteBlock(BuildingBlock):
 
 class CopyBlock(BuildingBlock):
     def __init__(self):
-        self.wrapper_function = FunctionCreator()
+        pass
 
     def translate(self, variable_name: str, copy_variable_name: str, compiler: AbstractCompiler) -> CodeBlock:
         limit_var, limit = compiler.one_var_limit()
@@ -157,13 +154,29 @@ class CopyBlock(BuildingBlock):
         return code_block
 
 
+class AddCleanBlock(BuildingBlock):
+    def __init__(self):
+        pass
+
+    def translate(self, variable_name: str, add_variable_name: str):
+        return Recipe({add_variable_name: 1}, {variable_name: 1})
+
+
+class IsBiggerBlock(BuildingBlock):
+    def __init__(self):
+        self.copy_block: BuildingBlock = CopyBlock()
+    def translate(self, variable_name: str, compare_variable_name: str, output_variable_name: str, compiler: AbstractCompiler) -> CodeBlock:
+
+
+        return code_block
+
+
 if __name__ == "__main__":
     abstract_compiler = AbstractCompiler([])
 
-    copy_block = CopyBlock()
-    cur_block: CodeBlock = copy_block.translate("a", "a2", abstract_compiler)
-    another_copy: CodeBlock = copy_block.translate("a2", "a3", abstract_compiler)
+    cur_copy_block = CopyBlock()
+    cur_block: CodeBlock = cur_copy_block.translate("a", "a2", abstract_compiler)
+    another_copy: CodeBlock = cur_copy_block.translate("a2", "a3", abstract_compiler)
     cur_block.join_block(another_copy)
 
     print(cur_block)
-
