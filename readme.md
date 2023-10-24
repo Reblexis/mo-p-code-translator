@@ -35,7 +35,7 @@ f2 -> f2_token_0
 f2_token_0 + C -> P + f2_token_0
 f2_token_0 + M -> P + f2_token_0
 f2_token_0 -> 0
-
+```
 
 
 Final goal:
@@ -117,4 +117,10 @@ f2_token_0 -> 0
 
 c + m -> f1 + c
 c2 + m -> f2 + c2
+```
+
+
+Wrapped function:
+```
+Recieves wrapped functions and returns one wrapped function which given one token (call) calls all of them sequentially.
 ```

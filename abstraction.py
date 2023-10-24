@@ -11,7 +11,8 @@ class Instruction:
 
 
 class AbstractCompiler(Compiler):
-    def __init__(self):
+    def __init__(self, instructions: list[str]):
+        super().__init__(instructions)
         self.variables = {}
 
     def allocate_memory(self, memory_type: int, ) -> str:
@@ -34,13 +35,37 @@ class AbstractCompiler(Compiler):
         return f"var_{name}_{current_value}"
 
 
-class Function(ABC):
+class BuildingBlock(ABC):
     @abstractmethod
     def translate(self, *args, **kwargs) -> list[Recipe]:
         pass
 
-class RecipeBlock:
-    def __init__(self, recipes: list[Recipe], limits: list[Limit] = None, name: str = None):
+
+class CodeBlock:
+    def __init__(self, recipes: list[Recipe], limits: list[Limit] = None):
+        self.recipes = recipes
+        self.limits = limits if limits is not None else []
+
+    def join_block(self, block):
+        self.recipes.extend(block.recipes)
+        if block.limits is not None:
+            self.limits.extend(block.limits)
+
+    def __str__(self) -> str:
+        value: str = ""
+        value += "Limits: \n"
+        for limit in self.limits:
+            value += f"{limit}\n"
+
+        value += "Recipes: \n"
+        for recipe in self.recipes:
+            value += f"{recipe} \n"
+
+        return value
+
+
+class FunctionBlock:
+    def __init__(self, name: str, recipes: list[Recipe], limits: list[Limit] = None):
         self.limits = limits if limits is not None else []
         self.recipes = recipes
         self.name = name
@@ -49,12 +74,6 @@ class RecipeBlock:
         self.recipes.extend(block.recipes)
         if block.limits is not None:
             self.limits.extend(block.limits)
-
-    def add_recipe(self, recipe: Recipe):
-        self.recipes.append(recipe)
-
-    def add_recipes(self, recipes: list[Recipe]):
-        self.recipes.extend(recipes)
 
     def __str__(self) -> str:
         value: str = ""
@@ -70,59 +89,81 @@ class RecipeBlock:
         return value
 
 
-class WrapperFunction(Function):
+class FunctionCall:
+    def __init__(self, function_name: str, args: dict[str, int]):
+        self.function_name = function_name
+        self.args = args
+
+
+class FunctionCreator(BuildingBlock):
     TOKEN_NAME = "token"
 
-    def wrap_block(self, block: RecipeBlock, function_name: str, index: int):
-        block.recipes[0].input_items[f"{function_name}_{self.TOKEN_NAME}_{index}"] = 1
-        block.recipes[-1].output_items[f"{function_name}_{self.TOKEN_NAME}_{index + 1}"] = 1
+    def translate(self, function_calls: list[FunctionCall], function_name: str) -> FunctionBlock:
+        recipes: list[Recipe] = []
+        for function_call in function_calls:
+            call_recipe = Recipe({}, {function_call.function_name: 1})
+            for arg, amount in function_call.args.items():
+                call_recipe.output_items[arg] = amount
+            recipes.append(call_recipe)
 
-    def translate(self, blocks: list[RecipeBlock], function_name: str) -> RecipeBlock:
-        blocks_copy = deepcopy(blocks)
-        code: RecipeBlock = RecipeBlock([Recipe({function_name: 1},
-                                                {f"{function_name}_{self.TOKEN_NAME}_{0}": 1})], function_name)
-        for i in range(len(blocks)):
-            self.wrap_block(blocks_copy[i], function_name, i)
-            code.join_block(blocks_copy[i])
+        recipes[0].input_items[function_name] = 1
+        for i in range(len(recipes)):
+            if i != 0:
+                recipes[i].input_items[f"{function_name}_{self.TOKEN_NAME}_{i - 1}"] = 1
+            if i != len(recipes) - 1:
+                recipes[i].output_items[f"{function_name}_{self.TOKEN_NAME}_{i}"] = 1
 
-        code.add_recipe(Recipe({f"{function_name}_{self.TOKEN_NAME}_{len(blocks)}": 1}, {}))
-        return code
+        return FunctionBlock(function_name, recipes)
 
 
-class LoopWasteFunction(Function):
+class ExecuteIfBlock(BuildingBlock):
+    def translate(self, function_name: str, conditions: list[str] = None) -> CodeBlock:
+        execute_recipe = Recipe({}, {function_name: 1})
+        conditions = conditions if conditions is not None else []
+        for condition in conditions:
+            execute_recipe.input_items[condition] = 1
+            execute_recipe.output_items[condition] = 1
+
+        return CodeBlock([execute_recipe])
+
+
+class LoopWasteBlock(BuildingBlock):
     def __init__(self):
-        self.wrapper_function = WrapperFunction()
+        self.wrapper_function = FunctionCreator()
 
-    def translate(self, block: RecipeBlock, amount_var: str, compiler: AbstractCompiler) -> RecipeBlock:
-        code: list[RecipeBlock] = []
-        loop_recipe = Recipe({amount_var: 1}, {block.name: 1})
-        code.append(block)
-        code.append(RecipeBlock([loop_recipe], None, compiler.get_loop_var()))
-        return self.wrapper_function.translate(code, compiler.get_loop_var())
+    def translate(self, block: FunctionCall, amount_var: str) -> CodeBlock:
+        loop_recipe = Recipe({amount_var: 1}, {block.function_name: 1})
+        for arg, amount in block.args.items():
+            loop_recipe.output_items[arg] = amount
+
+        return CodeBlock([loop_recipe])
 
 
-class CopyFunction(Function):
+class CopyBlock(BuildingBlock):
     def __init__(self):
-        self.wrapper_function = WrapperFunction()
+        self.wrapper_function = FunctionCreator()
 
-    def translate(self, variable_name: str, copy_variable_name: str, compiler: AbstractCompiler) -> RecipeBlock:
+    def translate(self, variable_name: str, copy_variable_name: str, compiler: AbstractCompiler) -> CodeBlock:
         limit_var, limit = compiler.one_var_limit()
-        code: RecipeBlock = RecipeBlock([], [limit])
         initializer_var: str = compiler.create_new_var()
-        code_block: RecipeBlock = RecipeBlock([
+        code_block: CodeBlock = CodeBlock([
             Recipe({}, {limit_var: 1, initializer_var: 1}),
             Recipe({initializer_var: 1, variable_name: 1}, {copy_variable_name: 1, initializer_var: 1,
                                                             f"{copy_variable_name}_2": 1}),
             Recipe({initializer_var: 1}, {}),
             Recipe({f"{copy_variable_name}_2": 1}, {variable_name: 1})
-        ])
+        ], [limit])
 
-        code.join_block(code_block)
-
-        return self.wrapper_function.translate([code], compiler.create_new_var())
+        return code_block
 
 
 if __name__ == "__main__":
-    abstract_compiler = AbstractCompiler()
-    cur_block: RecipeBlock = CopyFunction().translate("a", "a2", abstract_compiler)
+    abstract_compiler = AbstractCompiler([])
+
+    copy_block = CopyBlock()
+    cur_block: CodeBlock = copy_block.translate("a", "a2", abstract_compiler)
+    another_copy: CodeBlock = copy_block.translate("a2", "a3", abstract_compiler)
+    cur_block.join_block(another_copy)
+
     print(cur_block)
+
